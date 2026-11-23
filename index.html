@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inside the Buzz: How iPhone Haptics Work</title>
+<style>
+:root{--bg:#f3f4f1;--ink:#16181d;--mute:#5b6270;--panel:#fff;--line:#d9dcd3;--hot:#e4572e;--cool:#2a6f97;--box-sizing:border-box;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14161a;--ink:#eceee8;--mute:#9aa1ad;--panel:#1d2025;--line:#31353c;--hot:#ff7a4d;--cool:#6cb4de}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 Georgia,"Iowan Old Style",serif}
+main{max-width:980px;margin:0 auto;padding:24px 20px 60px}
+h1{font:800 clamp(2.2rem,7vw,4.2rem)/1 "Trebuchet MS",Verdana,sans-serif;letter-spacing:-.03em;margin:.2em 0 .3em}
+h2{font:700 1.5rem "Trebuchet MS",Verdana,sans-serif;margin:2.2em 0 .4em}
+p{max-width:68ch}
+.lede{font-size:1.15rem;color:var(--mute)}
+.stage{display:grid;grid-template-columns:260px 1fr;gap:24px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:24px;margin-top:20px}
+@media(max-width:720px){.stage{grid-template-columns:1fr}}
+.phonewrap{display:flex;justify-content:center;padding:10px}
+.phone{width:150px;height:300px;border-radius:30px;border:6px solid var(--ink);background:linear-gradient(160deg,var(--cool),#1b2a41);position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:16px;color:#fff;font:600 12px sans-serif;will-change:transform}
+.phone::before{content:"";position:absolute;top:8px;width:48px;height:12px;border-radius:8px;background:var(--ink)}
+.bar{position:absolute;bottom:46px;left:14px;right:14px;height:26px;border-radius:6px;background:rgba(255,255,255,.2);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--hot)}
+canvas{width:100%;height:150px;display:block;background:var(--bg);border-radius:10px;border:1px solid var(--line)}
+.ctrl{display:grid;grid-template-columns:110px 1fr 70px;gap:8px;align-items:center;font:600 14px "Trebuchet MS",sans-serif;margin:8px 0}
+input[type=range]{width:100%;accent-color:var(--hot)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+button{font:700 14px "Trebuchet MS",sans-serif;border:1.5px solid var(--ink);background:var(--panel);color:var(--ink);border-radius:999px;padding:10px 16px;cursor:pointer;min-height:44px}
+button:hover{background:var(--ink);color:var(--bg)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--cool);outline-offset:2px}
+button.go{background:var(--hot);border-color:var(--hot);color:#fff}
+.note{font-size:.9rem;color:var(--mute)}
+#lra{width:100%;max-width:640px;display:block;margin:14px 0}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h3{margin:0 0 4px;font:700 1rem "Trebuchet MS",sans-serif}
+.card p{margin:0;font-size:.95rem}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+td,th{border-bottom:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+.scroll{overflow-x:auto}
+@media(prefers-reduced-motion:reduce){.phone{transition:none}}
+canvas#dcan{height:170px;cursor:crosshair;touch-action:none}
+textarea{width:100%;height:170px;font:13px/1.4 ui-monospace,Menlo,monospace;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px}
+.q{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
+.q p{margin:0 0 8px;font-weight:700}
+.q button{margin:0 6px 6px 0}
+.ok{background:#2e7d32!important;border-color:#2e7d32!important;color:#fff!important}
+.bad{background:#b3261e!important;border-color:#b3261e!important;color:#fff!important}
+</style>
+</head>
+<body>
+<main>
+<h1>Inside the buzz: how iPhone haptics work</h1>
+<p class="lede">When your game character gets hit and your hand feels it, no spinning motor is involved. A small magnet slides back and forth inside a coil, and software shapes that motion into taps, thumps, and rumbles. Try it below.</p>
+
+<section class="stage" aria-label="Haptic simulator">
+  <div class="phonewrap"><div class="phone" id="phone" aria-hidden="true"><div class="bar"><i id="fill"></i></div><span id="state">Ready</span></div></div>
+  <div>
+    <canvas id="wave" width="640" height="150" role="img" aria-label="Vibration waveform"></canvas>
+    <div class="ctrl"><label for="freq">Frequency</label><input id="freq" type="range" min="40" max="300" value="150"><output id="ofreq">150 Hz</output></div>
+    <div class="ctrl"><label for="amp">Strength</label><input id="amp" type="range" min="10" max="100" value="70"><output id="oamp">70%</output></div>
+    <div class="ctrl"><label for="dur">Duration</label><input id="dur" type="range" min="20" max="1500" value="400"><output id="odur">400 ms</output></div>
+    <div class="btns"><button class="go" id="play">Play custom buzz</button></div>
+    <p class="note" id="support"></p>
+  </div>
+</section>
+
+<h2>Game moments, as haptic patterns</h2>
+<p>Game designers treat vibration like sound design. Each event gets its own shape of strength over time. Pick one and watch the phone and the waveform.</p>
+<div class="btns" id="presets"></div>
+
+<h2>Design your own haptic, then export it</h2>
+<p>Click or drag on the grid to set how strong the vibration is every 50 ms. Sharpness changes how crisp it feels. Then export it as real code for an iPhone app (Core Haptics) or an Android app.</p>
+<div class="card">
+<canvas id="dcan" width="640" height="170" role="img" aria-label="Strength over time editor, 20 bars of 50 milliseconds"></canvas>
+<div class="ctrl"><label for="dsharp">Sharpness</label><input id="dsharp" type="range" min="0" max="100" value="50"><output id="osharp">50%</output></div>
+<div class="btns"><button class="go" id="dplay">Play design</button><button id="dclear">Clear</button><button id="dahap">Export for iPhone (AHAP)</button><button id="dkt">Export for Android (Kotlin)</button><button id="dcopy">Copy code</button></div>
+<textarea id="code" readonly aria-label="Exported code" placeholder="Exported code appears here"></textarea>
+<p class="note">To use the AHAP file on an iPhone, add it to an Xcode project, load it with CHHapticEngine, and call makePlayer(with:) on the pattern.</p>
+</div>
+
+<h2>Check what you learned</h2>
+<div id="quiz"></div>
+
+<h2>What's inside: the Taptic Engine</h2>
+<p>iPhones use a linear resonant actuator (LRA). A small weight with a magnet is held by springs. A coil pushes it side to side when current flows through. The whole phone moves in reaction, and your hand feels it.</p>
+<svg id="lra" viewBox="0 0 640 200" role="img" aria-label="Diagram of a linear resonant actuator: coil, magnet mass and springs">
+  <rect x="20" y="30" width="600" height="140" rx="14" fill="none" stroke="currentColor" stroke-width="2"/>
+  <path d="M20 100 q10-20 20 0 t20 0 t20 0 t20 0" fill="none" stroke="var(--cool)" stroke-width="3"/>
+  <path d="M580 100 q-10-20 -20 0 t-20 0 t-20 0 t-20 0" fill="none" stroke="var(--cool)" stroke-width="3"/>
+  <g id="mass"><rect x="250" y="60" width="140" height="80" rx="8" fill="var(--hot)"/><text x="320" y="106" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="700" font-size="16">magnet mass</text></g>
+  <g fill="none" stroke="var(--cool)" stroke-width="5"><path d="M150 50 h300 M150 150 h300" stroke-dasharray="6 8"/></g>
+  <text x="150" y="26" font-family="sans-serif" font-size="14" fill="currentColor">coil (electromagnet) pushes the mass</text>
+  <text x="30" y="192" font-family="sans-serif" font-size="14" fill="currentColor">spring</text>
+  <text x="560" y="192" font-family="sans-serif" font-size="14" fill="currentColor">spring</text>
+</svg>
+
+<div class="cols">
+ <div class="card"><h3>Resonance</h3><p>The mass and springs have a natural frequency, around 150 to 200 Hz in many phones. Driving the coil near that frequency gives the strongest buzz for the least power.</p></div>
+ <div class="card"><h3>Crisp taps</h3><p>A very short pulse, then an opposite pulse to stop the mass quickly. This "braking" makes a sharp click instead of a mushy hum.</p></div>
+ <div class="card"><h3>Software shapes it</h3><p>iOS Core Haptics lets apps describe events as transient (a tap) or continuous (a rumble), each with intensity and sharpness, and sync them with audio.</p></div>
+</div>
+
+<h2>Old motor vs. Taptic Engine</h2>
+<div class="scroll"><table>
+<tr><th></th><th>Eccentric rotating mass (older phones)</th><th>Linear resonant actuator (iPhone)</th></tr>
+<tr><td>Motion</td><td>Spinning off-center weight</td><td>Back-and-forth slide</td></tr>
+<tr><td>Start/stop</td><td>Slow spin-up and spin-down</td><td>Starts and stops in milliseconds</td></tr>
+<tr><td>Feel</td><td>One buzzy rumble</td><td>Taps, clicks, thumps, textures</td></tr>
+<tr><td>Control</td><td>On/off and rough strength</td><td>Precise strength, sharpness, timing</td></tr>
+</table></div>
+
+<h2>Where you feel it</h2>
+<p>Games (hits, engines, explosions), keyboard feedback, the Home button on older models, Apple Pay confirmation, scroll pickers, and silent-mode alerts. In each case the haptic confirms something happened without you looking.</p>
+
+<h2>Project notes</h2>
+<p class="note">Built as a hackathon practice project. The simulator is a visual model: iPhone Safari does not let web pages trigger the Taptic Engine, so real vibration plays only on browsers that support the Vibration API (mainly Android). A native version would use Core Haptics in Swift.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const phone=$('phone'),cv=$('wave'),ctx=cv.getContext('2d'),fill=$('fill'),stateEl=$('state'),mass=$('mass');
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let seg=[{t:0,d:400,a:.7,f:150}],raf=0,start=0,total=400;
+const presets={
+ 'Explosion':[{t:0,d:120,a:1,f:60},{t:120,d:500,a:.7,f:80},{t:620,d:500,a:.25,f:100}],
+ 'Bullet hit':[{t:0,d:40,a:1,f:230},{t:60,d:30,a:.5,f:230}],
+ 'Heartbeat':[{t:0,d:70,a:.9,f:90},{t:130,d:90,a:.6,f:90},{t:800,d:70,a:.9,f:90},{t:930,d:90,a:.6,f:90}],
+ 'Engine rumble':Array.from({length:12},(_,i)=>({t:i*100,d:70,a:.35+i*.04,f:70+i*10})),
+ 'Collect coin':[{t:0,d:25,a:.6,f:250},{t:70,d:25,a:.9,f:280}],
+ 'Low health':[{t:0,d:150,a:.8,f:120},{t:300,d:150,a:.8,f:120},{t:600,d:150,a:.8,f:120}]
+};
+function env(s,ms){for(const g of s)if(ms>=g.t&&ms<g.t+g.d){const p=(ms-g.t)/g.d;return{a:g.a*(1-.35*p),f:g.f}}return{a:0,f:0}}
+function draw(ms){
+ const w=cv.width,h=cv.height;ctx.clearRect(0,0,w,h);
+ ctx.strokeStyle=css('--line');ctx.beginPath();ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
+ ctx.strokeStyle=css('--hot');ctx.lineWidth=2;ctx.beginPath();
+ for(let x=0;x<w;x++){const t=x/w*total;const e=env(seg,t);const y=h/2-e.a*(h/2-8)*Math.sin(2*Math.PI*e.f*t/1000);x?ctx.lineTo(x,y):ctx.moveTo(x,y)}
+ ctx.stroke();
+ if(ms!=null){ctx.strokeStyle=css('--cool');ctx.beginPath();const x=ms/total*w;ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}
+}
+function step(now){
+ const ms=now-start;
+ if(ms>=total){phone.style.transform='';mass.setAttribute('transform','');fill.style.width='0';stateEl.textContent='Ready';draw();return}
+ const e=env(seg,ms),ph=Math.sin(2*Math.PI*Math.min(e.f,40)*ms/1000*1.0+ms*e.f/18);
+ phone.style.transform=`translate(${ph*e.a*9}px,${-ph*e.a*3}px)`;
+ mass.setAttribute('transform',`translate(${ph*e.a*90} 0)`);
+ fill.style.width=e.a*100+'%';stateEl.textContent=e.a?'Vibrating':'Pause';
+ draw(ms);raf=requestAnimationFrame(step)
+}
+function play(s){
+ cancelAnimationFrame(raf);seg=s;total=Math.max(...s.map(g=>g.t+g.d))+60;
+ try{if(navigator.vibrate){const pat=[];let c=0;for(const g of s){if(g.t>c)pat.push(0,g.t-c);pat.push(Math.round(g.d*Math.max(g.a,.2)));c=g.t+g.d}navigator.vibrate(pat.length?pat:[100])}}catch(e){}
+ start=performance.now();raf=requestAnimationFrame(step)
+}
+function custom(){return[{t:0,d:+$('dur').value,a:$('amp').value/100,f:+$('freq').value}]}
+function upd(){$('ofreq').textContent=$('freq').value+' Hz';$('oamp').textContent=$('amp').value+'%';$('odur').textContent=$('dur').value+' ms';seg=custom();total=seg[0].d+60;draw()}
+['freq','amp','dur'].forEach(i=>$(i).addEventListener('input',upd));
+$('play').onclick=()=>play(custom());
+for(const k in presets){const b=document.createElement('button');b.textContent=k;b.onclick=()=>play(presets[k]);$('presets').appendChild(b)}
+$('support').textContent=('vibrate' in navigator)?'Your browser supports the Vibration API, so you may feel the buzz too.':'This browser cannot vibrate from a web page, so the motion shown is a simulation.';
+const N=20,STEP=50;let bars=[.9,.7,.5,.3,.2,.1].concat(Array(14).fill(0));
+const dc=$('dcan'),dx=dc.getContext('2d');
+function ddraw(){const w=dc.width,h=dc.height,bw=w/N;dx.clearRect(0,0,w,h);dx.fillStyle=css('--hot');for(let i=0;i<N;i++){const bh=bars[i]*(h-8);dx.fillRect(i*bw+2,h-bh,bw-4,bh)}}
+function setBar(e){const r=dc.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=1-(e.clientY-r.top)/r.height;bars[Math.min(N-1,Math.max(0,Math.floor(x*N)))]=Math.round(Math.min(1,Math.max(0,y))*20)/20;ddraw()}
+let down=false;dc.addEventListener('pointerdown',e=>{down=true;dc.setPointerCapture(e.pointerId);setBar(e)});dc.addEventListener('pointermove',e=>{if(down)setBar(e)});dc.addEventListener('pointerup',()=>down=false);
+const sharp=()=>+$('dsharp').value;
+$('dsharp').addEventListener('input',()=>$('osharp').textContent=sharp()+'%');
+function dseg(){return bars.map((a,i)=>({t:i*STEP,d:STEP,a,f:60+sharp()*2.4})).filter(g=>g.a>0)}
+$('dplay').onclick=()=>{const s=dseg();if(s.length)play(s)};
+$('dclear').onclick=()=>{bars=Array(N).fill(0);ddraw()};
+function ahap(){const P=[];bars.forEach((a,i)=>{if(a>0)P.push({Event:{Time:+(i*STEP/1000).toFixed(3),EventType:'HapticContinuous',EventDuration:STEP/1000,EventParameters:[{ParameterID:'HapticIntensity',ParameterValue:a},{ParameterID:'HapticSharpness',ParameterValue:sharp()/100}]}})});return JSON.stringify({Version:1.0,Pattern:P},null,2)}
+function kt(){return 'val timings = longArrayOf('+bars.map(()=>STEP).join(', ')+')\nval amps = intArrayOf('+bars.map(a=>Math.round(a*255)).join(', ')+')\nvibrator.vibrate(VibrationEffect.createWaveform(timings, amps, -1))'}
+$('dahap').onclick=()=>$('code').value=ahap();
+$('dkt').onclick=()=>$('code').value=kt();
+$('dcopy').onclick=()=>{const c=$('code');c.select();try{navigator.clipboard.writeText(c.value)}catch(e){}};
+const Q=[['What moves inside the Taptic Engine?',['A spinning off-center weight','A magnet mass held by springs','A tiny speaker cone'],1],['Why do iPhone taps feel crisp?',['The motor starts and stops in milliseconds','The battery is larger','The motor spins faster'],0],['What does Core Haptics let an app describe?',['Only on or off','Intensity and sharpness over time','Screen brightness'],1]];
+Q.forEach(([q,o,c])=>{const d=document.createElement('div');d.className='q';d.innerHTML='<p>'+q+'</p>';o.forEach((t,i)=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{b.className=i===c?'ok':'bad'};d.appendChild(b)});$('quiz').appendChild(d)});
+ddraw();upd();
+</script>
+</body>
+</html>
